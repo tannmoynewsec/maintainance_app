@@ -1,0 +1,26 @@
+{
+    "paused": false,
+    "custom_order": [
+        "6",
+        "7",
+        "8",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+    ],
+    "email_settings": {
+        "smtp_server": "",
+        "smtp_port": 587,
+        "sender_email": "",
+        "sender_password": "",
+        "notifications_enabled": false,
+        "reminder_days": 7,
+        "cc_emails": []
+    },
+    "ui_settings": {
+        "dark_mode": true,
+        "show_week_numbers": true
+    }
+}
