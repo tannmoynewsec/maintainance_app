@@ -215,7 +215,7 @@ TEMPLATE = '''
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maintenance Support Scheduler</title>
+    <title>Maintainance Support Scheduler</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -480,7 +480,7 @@ TEMPLATE = '''
                 <img src="{% if bias_logo %}data:image/png;base64,{{ bias_logo }}{% else %}{{ url_for('static', filename='bias_logo.png') }}{% endif %}" alt="BIAS Logo" class="logo">
                 <span class="bias-name">BIAS</span>
             </div>
-            <h1>Maintenance Support Scheduler</h1>
+            <h1>Maintainance Support Scheduler</h1>
         </div>
         
         <div class="card">
@@ -525,7 +525,7 @@ TEMPLATE = '''
         </div>
         
         <footer>
-            &copy; 2025 Maintenance Support Scheduler | <a href="/admin" style="color:inherit;">Admin</a>
+            &copy; 2025 Maintainance Support Scheduler | <a href="/admin" style="color:inherit;">Admin</a>
         </footer>
     </div>
     
