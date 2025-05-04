@@ -16,7 +16,7 @@ logging.basicConfig(level=log_level,
 logger = logging.getLogger(__name__)
 
 # Log startup information
-logger.info("Starting Maintenance Support Scheduler")
+logger.info("Starting Maintainance Support Scheduler")
 logger.info(f"Python version: {sys.version}")
 logger.info(f"Working directory: {os.getcwd()}")
 
