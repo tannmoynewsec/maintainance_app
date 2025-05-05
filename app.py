@@ -7,6 +7,8 @@ import sys
 import logging
 import uuid
 from dotenv import load_dotenv
+from flask_apscheduler import APScheduler
+from scheduler import advance_rotation
 
 # Set up logging
 log_level = logging.DEBUG if os.environ.get('DEBUG', 'False').lower() == 'true' else logging.INFO
@@ -42,24 +44,44 @@ HOLIDAYS_FILE = os.path.join(BASE_PATH, 'holidays.json')
 SETTINGS_FILE = os.path.join(BASE_PATH, 'settings.json')
 
 # Set up logo path
-LOGO_PATH = os.path.join(BASE_PATH, 'assets', 'bias_logo.png')
-logger.debug(f"Logo path: {LOGO_PATH}")
+# Logo path removed as per requirements
 
 # Initialize Flask app
 app = Flask(__name__, static_url_path='/assets', static_folder='assets')
 app.secret_key = os.environ.get('SECRET_KEY', 'default_dev_key_change_in_production')
 
-# Load logo for display
-logo_b64 = ""
-try:
-    if os.path.exists(LOGO_PATH):
-        with open(LOGO_PATH, 'rb') as f:
-            logo_bytes = f.read()
-            logo_b64 = base64.b64encode(logo_bytes).decode('utf-8')
-    else:
-        logger.warning(f"Logo file not found: {LOGO_PATH}")
-except Exception as e:
-    logger.error(f"Error loading logo: {str(e)}")
+# Simplify session configuration - use the default, in-memory session
+# This is more reliable than filesystem for admin login functionality
+app.config['SESSION_PERMANENT'] = True
+app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(days=1)  # Session lasts for 1 day
+
+# Set up application logging level to debug to help diagnose issues
+logging.getLogger('app').setLevel(logging.DEBUG)
+
+# Initialize scheduler
+scheduler = APScheduler()
+# Configure scheduler to not interfere with Flask sessions
+scheduler.api_enabled = False
+scheduler.init_app(app)
+
+# Schedule the rotation to happen every Monday at 00:00 AM
+@scheduler.task('cron', id='rotate_schedule', day_of_week='mon', hour=0, minute=0)
+def scheduled_rotation():
+    """Advances the rotation order automatically every Monday at midnight"""
+    logger.info("Scheduled task: Advancing rotation order")
+    with app.app_context():
+        # Run the rotation within the app context
+        result = advance_rotation()
+        if result:
+            logger.info("Rotation order advanced successfully")
+        else:
+            logger.warning("Failed to advance rotation order or rotation is paused")
+        return result
+
+# Start the scheduler
+scheduler.start()
+
+# Logo loading removed as per requirements
 
 # Helper functions for data loading/saving
 def safe_load_json(file_path):
@@ -111,7 +133,7 @@ def safe_save_json(file_path, data):
 def load_holidays():
     with open(HOLIDAYS_FILE, "r", encoding="utf-8") as f:
         data = json.load(f)
-    return [h["date"] for h in data["holidays"]]
+    return data["holidays"]
 
 def load_personnel():
     with open(PERSONNEL_FILE, "r", encoding="utf-8") as f:
@@ -133,6 +155,8 @@ def get_person_for_week(week_offset=0):
     # First, sort personnel alphabetically by name (this is the default order)
     personnel = sorted(load_personnel(), key=lambda x: x["name"].lower())
     holidays = load_holidays()
+    # Extract just the dates from the holiday objects for easier comparison
+    holiday_dates = [h['date'] for h in holidays]
     settings = load_settings()
     paused = settings.get("paused", False)
     custom_order = settings.get("custom_order", [])
@@ -143,8 +167,7 @@ def get_person_for_week(week_offset=0):
         personnel = sorted(personnel, key=lambda x: custom_order.index(x["id"]))
     if paused:
         week_offset = 0
-    
-    # Start from today and move forward/backward, skipping holidays
+      # Start from today and move forward/backward, skipping holidays
     base_date = datetime.date.today()
     last_valid_start = base_date.strftime("%Y-%m-%d")
     last_valid_end = (base_date + datetime.timedelta(days=6)).strftime("%Y-%m-%d")
@@ -159,7 +182,7 @@ def get_person_for_week(week_offset=0):
             week_end = week_start + datetime.timedelta(days=6)
             week_number = week_start.isocalendar()[1]
             date_str = week_start.strftime("%Y-%m-%d")
-            if date_str not in holidays:
+            if date_str not in holiday_dates:
                 last_valid_start = date_str
                 last_valid_end = week_end.strftime("%Y-%m-%d")
                 last_valid_number = week_number
@@ -174,7 +197,7 @@ def get_person_for_week(week_offset=0):
             week_end = week_start + datetime.timedelta(days=6)
             week_number = week_start.isocalendar()[1]
             date_str = week_start.strftime("%Y-%m-%d")
-            if date_str not in holidays:
+            if date_str not in holiday_dates:
                 last_valid_start = date_str
                 last_valid_end = week_end.strftime("%Y-%m-%d")
                 last_valid_number = week_number
@@ -191,22 +214,7 @@ def get_person_for_week(week_offset=0):
     }
 
 # Helper function to get the logo as a base64 string
-def get_bias_logo():
-    # Always try to use the base64 encoded logo first
-    if logo_b64:
-        return logo_b64
-    
-    # If base64 logo isn't available, return empty string
-    # The template will use the direct URL as fallback
-    return ""
-
-# Route to serve the logo directly (as an alternative to base64)
-@app.route('/logo')
-def serve_logo():
-    if os.path.exists(LOGO_PATH):
-        return app.send_static_file('bias_logo.png')
-    else:
-        return "", 404
+# Logo functionality has been removed as per requirements
 
 # Define the HTML template
 TEMPLATE = '''
@@ -291,8 +299,8 @@ TEMPLATE = '''
         }
         
         .bias-name {
-            font-size: 1.2em;
-            font-weight: 600;
+            font-size: 2.2em;
+            font-weight: 700;
             color: var(--heading-color-light);
             transition: color 0.3s ease;
         }
@@ -474,10 +482,8 @@ TEMPLATE = '''
                 </button>
             </form>
         </div>
-        
-        <div class="header-container">
+          <div class="header-container">
             <div class="logo-container">
-                <img src="{% if bias_logo %}data:image/png;base64,{{ bias_logo }}{% else %}{{ url_for('static', filename='bias_logo.png') }}{% endif %}" alt="BIAS Logo" class="logo">
                 <span class="bias-name">BIAS</span>
             </div>
             <h1>Maintainance Support Scheduler</h1>
@@ -540,18 +546,52 @@ TEMPLATE = '''
 
 # Helper function for admin authentication
 def is_logged_in():
-    return session.get('logged_in', False)
+    try:
+        # Debug full session contents
+        logger.debug(f"Session contents: {dict(session)}")
+        
+        logged_in = session.get('logged_in', False)
+        login_time = session.get('login_time', None)
+        logger.debug(f"Session check - logged_in: {logged_in}, login_time: {login_time}")
+        
+        # Check if the session contains all required values
+        if logged_in and login_time:
+            logger.debug("Valid session found")
+            return True
+        
+        # If we reached here, the session is not valid
+        logger.debug("Invalid session - missing required values")
+        return False
+    except Exception as e:
+        logger.error(f"Error checking login status: {str(e)}")
+        return False
 
 # Admin routes
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
+    logger.debug("Admin login page accessed")
+    logger.debug(f"Expected credentials - Username: {ADMIN_USERNAME}, Password: {ADMIN_PASSWORD[:2]}***")
+    
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+        logger.debug(f"Admin login attempt: {username} with password length {len(password) if password else 0}")
+        
+        # Log expected vs. provided credentials for debugging
+        match_user = username == ADMIN_USERNAME
+        match_pwd = password == ADMIN_PASSWORD
+        logger.debug(f"Username match: {match_user}, Password match: {match_pwd}")
+        
+        if match_user and match_pwd:
+            session.clear()  # Clear any old session
             session['logged_in'] = True
-            return redirect(url_for('admin_dashboard'))
+            session['login_time'] = datetime.datetime.now().isoformat()
+            session.permanent = True  # Make session permanent
+            logger.info(f"Admin login successful for user: {username}")
+            # Use absolute URL for redirect to avoid potential issues
+            return redirect(url_for('admin_dashboard', _external=True))
         else:
+            logger.warning(f"Failed admin login attempt for user: {username}")
             flash('Invalid credentials', 'danger')
     return render_template_string('''
     <form method="post" style="max-width:350px;margin:60px auto;padding:2em 2em 1em 2em;background:#fff;border-radius:10px;box-shadow:0 2px 12px #0001;">
@@ -578,7 +618,10 @@ def admin_logout():
 
 @app.route('/admin', methods=['GET', 'POST'])
 def admin_dashboard():
-    if not is_logged_in():
+    logger.debug("Admin dashboard accessed")
+    logged_in = is_logged_in()
+    if not logged_in:
+        logger.warning("Unauthorized access attempt to admin dashboard")
         return redirect(url_for('admin_login'))
     personnel = load_personnel()
     holidays = load_holidays()
@@ -636,17 +679,13 @@ def admin_dashboard():
                 logger.error(f"Error sending test email: {str(e)}")
                 msg = f"Error sending test email: {str(e)}"
     
-    # Get the BIAS logo
-    bias_logo = get_bias_logo()
+    # BIAS logo removed as per requirements
+    bias_logo = None
     
     return render_template_string('''
     <div style="max-width:700px;margin:40px auto;padding:2em 2.5em 1.5em 2.5em;background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-        <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:1em;">
-            <div style="display:flex;align-items:center;margin-bottom:0.5em;">
-                {% if bias_logo %}
-                <img src="{% if bias_logo %}data:image/png;base64,{{ bias_logo }}{% else %}{{ url_for('static', filename='bias_logo.png') }}{% endif %}" alt="BIAS Logo" style="width:50px;height:50px;margin-right:10px;">
-                {% endif %}
-                <span style="font-size:1.2em;font-weight:600;">BIAS</span>
+        <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:1em;">            <div style="display:flex;align-items:center;margin-bottom:0.5em;">
+                <span style="font-size:2em;font-weight:700;">BIAS</span>
             </div>
             <h1 style="text-align:center;color:#2a4365;margin:0.5em 0;">Admin Dashboard</h1>
         </div>
@@ -862,8 +901,8 @@ def dashboard():
     theme_cookie = request.cookies.get('theme')
     dark_mode = theme_cookie == 'dark' if theme_cookie else ui_settings.get('dark_mode', False)
     
-    # Get the BIAS logo
-    bias_logo = get_bias_logo()
+    # BIAS logo removed as per requirements
+    bias_logo = None
     
     return render_template_string(TEMPLATE, 
                                 current=current, 

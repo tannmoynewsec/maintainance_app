@@ -1,0 +1,6 @@
+{
+  "excludeDefaultPlatformDetectors": false,
+  "includePlatformDetectors": ["python"],
+  "skipDetectionForFiles": ["package.json", "composer.json", "*.php"],
+  "preferredPlatform": "python"
+}

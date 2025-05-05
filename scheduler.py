@@ -10,6 +10,11 @@ def load_settings():
         settings = json.load(f)
     return settings
 
+def save_settings(settings):
+    """Save settings to settings.json"""
+    with open("settings.json", "w", encoding="utf-8") as f:
+        json.dump(settings, f, indent=4)
+
 def load_personnel():
     """Load personnel data from personnel.json"""
     with open("personnel.json", "r", encoding="utf-8") as f:
@@ -28,6 +33,54 @@ def check_upcoming_notifications():
     days_in_advance = email_settings.get('reminder_days', 7)
     print(f"Checking for duties starting in {days_in_advance} days...")
     send_upcoming_notifications(days_in_advance)
+    return True
+
+def advance_rotation():
+    """Advance the rotation order automatically
+    
+    This function is designed to be called every Monday at 00:00 AM to automatically
+    rotate the order so that current person becomes previous and upcoming becomes current.
+    If a specific person was chosen by admin, it will rotate from that person while
+    maintaining alphabetical sequence.
+    """
+    settings = load_settings()
+    
+    # Skip if rotation is paused
+    if settings.get('paused', False):
+        print("Rotation is currently paused. Not advancing.")
+        return False
+    
+    # Load personnel and get existing custom order (if any)
+    all_personnel = load_personnel()
+    current_custom_order = settings.get('custom_order', [])
+    
+    # If we have no personnel, just return
+    if not all_personnel:
+        print("No active personnel found. Order maintained as empty.")
+        settings['custom_order'] = []
+        save_settings(settings)
+        return True
+        
+    # Check if we have a specific starting person (custom order) set by admin
+    if current_custom_order and len(current_custom_order) > 0:
+        # Rotate the custom order by moving the first person to the end
+        new_order = current_custom_order[1:] + [current_custom_order[0]]
+        print(f"Rotating order: Moving {current_custom_order[0]} to the end.")
+    else:
+        # If no custom order, create a new one based on alphabetical order
+        sorted_personnel = sorted(all_personnel, key=lambda x: x["name"].lower())
+        new_order = [p["id"] for p in sorted_personnel]
+        print("No custom order found. Using alphabetical order.")
+    
+    # Update the settings with the new order
+    settings['custom_order'] = new_order
+    save_settings(settings)
+    
+    if new_order:
+        print(f"Rotation advanced successfully. New rotation starts with ID: {new_order[0]}")
+    else:
+        print("No active personnel found. Order maintained as empty.")
+    
     return True
 
 def send_schedule_summary():
@@ -134,6 +187,8 @@ if __name__ == "__main__":
                       help='Check and send reminders for upcoming support duties')
     parser.add_argument('--send-summary', action='store_true',
                       help='Send schedule summary to all personnel')
+    parser.add_argument('--advance-rotation', action='store_true',
+                      help='Update the rotation order alphabetically (typically run every Monday)')
     
     args = parser.parse_args()
     
@@ -141,5 +196,7 @@ if __name__ == "__main__":
         check_upcoming_notifications()
     elif args.send_summary:
         send_schedule_summary()
+    elif args.advance_rotation:
+        advance_rotation()
     else:
         parser.print_help()
