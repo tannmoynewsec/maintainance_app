@@ -1,14 +1,13 @@
-{
-    "paused": false,
+{    "paused": false,
     "custom_order": [
+        "1",
         "2",
-        "3",
         "4",
+        "3",
         "5",
         "6",
         "7",
-        "8",
-        "1"
+        "8"
     ],
     "email_settings": {
         "smtp_server": "",

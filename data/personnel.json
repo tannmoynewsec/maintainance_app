@@ -1,0 +1,54 @@
+{
+    "personnel": [
+
+        {
+            "id": "1",
+            "name": "Abhishek Gupta",
+            "email": "Abhishek.Gupta@newsec.com",
+            "isActive": true
+        },
+        {
+            "id": "2",
+            "name": "Apoorva Udayakumar",
+            "email": "Apoorva.Udayakumar@newsec.com",
+            "isActive": true
+        },
+        {
+            "id": "3",
+            "name": "Daniel Schenning",
+            "email": "Daniel.Schenning@newsec.com",
+
+            "isActive": true
+        },
+        {
+            "id": "4",
+            "name": "Dinesh Rajput",
+            "email": "Dinesh.Rajput@newsec.com",
+            "isActive": true
+        },
+        {
+            "id": "5",
+            "name": "Emanuel Ravemyr",
+            "email": "Emanuel.Ravemyr@newsec.se",
+            "isActive": true
+        },
+        {
+            "id": "6",
+            "name": "Nilesh Agrawal",
+            "email": "Nilesh.Agrawal@newsec.com",
+            "isActive": true
+        },
+                {
+            "id": "7",
+            "name": "Tanmoy Santra",
+            "email": "Tanmoy.santra@newsec.com",
+            "isActive": true
+        },
+        {
+            "id": "8",
+            "name": "Victor Kesten",
+            "email": "Victor.Kesten@newsec.com",
+            "isActive": true
+        }
+    ]
+}

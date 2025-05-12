@@ -162,6 +162,14 @@ Get-ChildItem -Path "." -Exclude "__pycache__", ".git", ".vscode", "app.zip", "t
         Copy-Item -Path $_.FullName -Destination "$tempDir\$($_.Name)" -Recurse -Force
     }
 
+# For Azure deployment, also copy data files to the root directory
+Write-Info "Copying data files to root for Azure deployment..."
+if (Test-Path ".\data") {
+    Copy-Item -Path ".\data\personnel.json" -Destination "$tempDir\personnel.json" -Force
+    # holidays.json no longer needed
+    Copy-Item -Path ".\data\settings.json" -Destination "$tempDir\settings.json" -Force
+}
+
 # Create ZIP from the temp directory
 [System.IO.Compression.ZipFile]::CreateFromDirectory($tempDir, $zipPath, $compressionLevel, $includeBaseDirectory)
 

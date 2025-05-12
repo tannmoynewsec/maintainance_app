@@ -6,18 +6,24 @@ from notification import send_notification, send_upcoming_notifications
 
 def load_settings():
     """Load settings from settings.json"""
-    with open("settings.json", "r", encoding="utf-8") as f:
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    settings_file = os.path.join(base_path, "settings.json")
+    with open(settings_file, "r", encoding="utf-8") as f:
         settings = json.load(f)
     return settings
 
 def save_settings(settings):
     """Save settings to settings.json"""
-    with open("settings.json", "w", encoding="utf-8") as f:
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    settings_file = os.path.join(base_path, "settings.json")
+    with open(settings_file, "w", encoding="utf-8") as f:
         json.dump(settings, f, indent=4)
 
 def load_personnel():
     """Load personnel data from personnel.json"""
-    with open("personnel.json", "r", encoding="utf-8") as f:
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    personnel_file = os.path.join(base_path, "personnel.json")
+    with open(personnel_file, "r", encoding="utf-8") as f:
         data = json.load(f)
     return [p for p in data["personnel"] if p["isActive"]]
 

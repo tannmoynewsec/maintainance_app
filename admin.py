@@ -3,7 +3,6 @@ import sys
 import uuid
 
 PERSONNEL_FILE = "personnel.json"
-HOLIDAYS_FILE = "holidays.json"
 
 def load_json(path):
     with open(path, "r", encoding="utf-8") as f:
@@ -45,20 +44,13 @@ def remove_person(pid):
     print(f"Removed person with id {pid}")
 
 def list_holidays():
-    data = load_json(HOLIDAYS_FILE)
-    for h in data["holidays"]:
-        print(f"{h['date']}: {h['name']}")
+    print("Holiday functionality has been removed from the system")
 
 def add_holiday(date, name):
-    data = load_json(HOLIDAYS_FILE)
-    data["holidays"].append({"date": date, "name": name})
-    save_json(HOLIDAYS_FILE, data)
-    print(f"Added holiday: {date} - {name}")
+    print("Holiday functionality has been removed from the system")
 
 def remove_holiday(date):
-    data = load_json(HOLIDAYS_FILE)
-    data["holidays"] = [h for h in data["holidays"] if h["date"] != date]
-    save_json(HOLIDAYS_FILE, data)
+    print("Holiday functionality has been removed from the system")
     print(f"Removed holiday on {date}")
 
 def usage():
@@ -68,9 +60,6 @@ Admin Commands:
   python admin.py add-person "Name" "email@example.com"
   python admin.py edit-person <id> [--name "New Name"] [--email "new@email.com"] [--active true|false]
   python admin.py remove-person <id>
-  python admin.py list-holidays
-  python admin.py add-holiday YYYY-MM-DD "Holiday Name"
-  python admin.py remove-holiday YYYY-MM-DD
   python admin.py pause-order
   python admin.py resume-order
   python admin.py reset-order

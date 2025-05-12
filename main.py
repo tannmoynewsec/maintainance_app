@@ -19,13 +19,11 @@ if IN_AZURE:
     # In Azure, use the deployment path
     BASE_PATH = os.environ.get('HOME', '') + '/site/wwwroot'
     PERSONNEL_FILE = os.path.join(BASE_PATH, "personnel.json")
-    HOLIDAYS_FILE = os.path.join(BASE_PATH, "holidays.json")
     SETTINGS_FILE = os.path.join(BASE_PATH, "settings.json")
     logger.info(f"Using Azure path for data files: {BASE_PATH}")
 else:
     # Local development path
     PERSONNEL_FILE = "personnel.json"
-    HOLIDAYS_FILE = "holidays.json"
     SETTINGS_FILE = "settings.json"
     logger.info("Using local path for data files")
 
@@ -41,15 +39,9 @@ def load_personnel() -> List[Dict]:
         return []
 
 def load_holidays() -> List[str]:
-    try:
-        with open(HOLIDAYS_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        logger.info(f"Successfully loaded holidays data from {HOLIDAYS_FILE}")
-        return [h["date"] for h in data["holidays"]]
-    except Exception as e:
-        logger.error(f"Error loading holidays data: {str(e)}")
-        # Return empty list as fallback
-        return []
+    """Holiday logic has been removed, returning empty list for compatibility"""
+    logger.info("Holiday functionality has been removed, returning empty list")
+    return []
 
 def load_settings() -> Dict:
     try:
@@ -73,7 +65,6 @@ def get_week_dates(reference: datetime.date = None):
 def get_person_for_week(week_offset=0) -> Dict:
     # First, sort personnel alphabetically by name (this is the default order)
     personnel = sorted(load_personnel(), key=lambda x: x["name"].lower())
-    holidays = load_holidays()
     settings = load_settings()
     paused = settings.get("paused", False)
     custom_order = settings.get("custom_order", [])
@@ -86,16 +77,17 @@ def get_person_for_week(week_offset=0) -> Dict:
     if paused:
         # If paused, always show the current week as the same as last week
         week_offset = 0
-    week_start = get_week_dates() + datetime.timedelta(weeks=week_offset)
-    # Count only non-holiday weeks
-    idx = 0
-    week = 0
-    while week <= abs(week_offset):
-        date_str = (get_week_dates() + datetime.timedelta(weeks=idx)).strftime("%Y-%m-%d")
-        if date_str not in holidays:
-            week += 1
-        idx += 1 if week_offset >= 0 else -1
-    pos = (idx-1) % len(personnel) if week_offset >= 0 else (idx) % len(personnel)
+        # Start from today and calculate position directly based on week offset
+    base_date = datetime.date.today()
+    
+    # Calculate position based on week offset
+    if len(personnel) > 0:
+        pos = week_offset % len(personnel)
+        if week_offset < 0:
+            # Handle negative offsets correctly
+            pos = (len(personnel) + pos) % len(personnel)
+    else:
+        pos = 0
     return personnel[pos]
 
 def show_dashboard():

@@ -38,10 +38,16 @@ logger.debug(f"Base path: {BASE_PATH}")
 ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
 
-# Set up data paths
-PERSONNEL_FILE = os.path.join(BASE_PATH, 'personnel.json')
-HOLIDAYS_FILE = os.path.join(BASE_PATH, 'holidays.json')
-SETTINGS_FILE = os.path.join(BASE_PATH, 'settings.json')
+# Set up data paths - check both in data directory and root directory
+DATA_DIR = os.path.join(BASE_PATH, 'data')
+if os.path.isdir(DATA_DIR):
+    logger.info(f"Using data directory: {DATA_DIR}")
+    PERSONNEL_FILE = os.path.join(DATA_DIR, 'personnel.json')
+    SETTINGS_FILE = os.path.join(DATA_DIR, 'settings.json')
+else:
+    logger.info("Data directory not found, using root directory")
+    PERSONNEL_FILE = os.path.join(BASE_PATH, 'personnel.json')
+    SETTINGS_FILE = os.path.join(BASE_PATH, 'settings.json')
 
 # Set up logo path
 # Logo path removed as per requirements
@@ -60,26 +66,34 @@ logging.getLogger('app').setLevel(logging.DEBUG)
 
 # Initialize scheduler
 scheduler = APScheduler()
-# Configure scheduler to not interfere with Flask sessions
+# Configure scheduler with proper settings
 scheduler.api_enabled = False
 scheduler.init_app(app)
+# Set scheduler configuration
+scheduler.scheduler.configure(timezone='UTC')
 
 # Schedule the rotation to happen every Monday at 00:00 AM
-@scheduler.task('cron', id='rotate_schedule', day_of_week='mon', hour=0, minute=0)
+@scheduler.task('cron', id='rotate_schedule', day_of_week='mon', hour=0, minute=0, misfire_grace_time=3600)
 def scheduled_rotation():
     """Advances the rotation order automatically every Monday at midnight"""
     logger.info("Scheduled task: Advancing rotation order")
-    with app.app_context():
-        # Run the rotation within the app context
-        result = advance_rotation()
-        if result:
-            logger.info("Rotation order advanced successfully")
-        else:
-            logger.warning("Failed to advance rotation order or rotation is paused")
-        return result
+    try:
+        with app.app_context():
+            # Run the rotation within the app context
+            result = advance_rotation()
+            if result:
+                logger.info("Rotation order advanced successfully")
+            else:
+                logger.warning("Failed to advance rotation order or rotation is paused")
+            return result
+    except Exception as e:
+        logger.error(f"Error in scheduled rotation: {str(e)}")
+        return False
 
 # Start the scheduler
 scheduler.start()
+logger.info("APScheduler started successfully")
+logger.info(f"Next run time for rotation task: {scheduler.get_job('rotate_schedule').next_run_time}")
 
 # Logo loading removed as per requirements
 
@@ -130,19 +144,34 @@ def safe_save_json(file_path, data):
         logger.error(f"Error saving {file_path}: {str(e)}")
         raise
 
-def load_holidays():
-    with open(HOLIDAYS_FILE, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    return data["holidays"]
+# Holiday functionality has been removed
 
 def load_personnel():
-    with open(PERSONNEL_FILE, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    return [p for p in data["personnel"] if p["isActive"]]
+    """Load personnel from the personnel.json file"""
+    try:
+        with open(PERSONNEL_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return [p for p in data["personnel"] if p["isActive"]]
+    except FileNotFoundError as e:
+        logger.error(f"Could not find personnel file: {PERSONNEL_FILE}")
+        logger.error(f"Current directory: {os.getcwd()}")
+        logger.error(f"Directory contents: {os.listdir(os.path.dirname(PERSONNEL_FILE))}")
+        return []
 
 def load_settings():
-    with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    """Load settings from the settings.json file"""
+    try:
+        with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError as e:
+        logger.error(f"Could not find settings file: {SETTINGS_FILE}")
+        logger.error(f"Current directory: {os.getcwd()}")
+        logger.error(f"Directory contents: {os.listdir(os.path.dirname(SETTINGS_FILE))}")
+        return {}
+
+def load_holidays():
+    """Holiday logic has been removed, returning empty list for compatibility"""
+    return []
 
 def get_week_dates(reference=None):
     today = reference or datetime.date.today()
@@ -154,9 +183,6 @@ def get_week_dates(reference=None):
 def get_person_for_week(week_offset=0):
     # First, sort personnel alphabetically by name (this is the default order)
     personnel = sorted(load_personnel(), key=lambda x: x["name"].lower())
-    holidays = load_holidays()
-    # Extract just the dates from the holiday objects for easier comparison
-    holiday_dates = [h['date'] for h in holidays]
     settings = load_settings()
     paused = settings.get("paused", False)
     custom_order = settings.get("custom_order", [])
@@ -167,50 +193,35 @@ def get_person_for_week(week_offset=0):
         personnel = sorted(personnel, key=lambda x: custom_order.index(x["id"]))
     if paused:
         week_offset = 0
-      # Start from today and move forward/backward, skipping holidays
+      
+    # Start from today and move forward/backward
     base_date = datetime.date.today()
-    last_valid_start = base_date.strftime("%Y-%m-%d")
-    last_valid_end = (base_date + datetime.timedelta(days=6)).strftime("%Y-%m-%d")
-    last_valid_number = base_date.isocalendar()[1]
-    idx = 0
-    week = 0
     
-    if week_offset >= 0:
-        current_date = base_date
-        while week <= week_offset:
-            week_start = current_date - datetime.timedelta(days=current_date.weekday())
-            week_end = week_start + datetime.timedelta(days=6)
-            week_number = week_start.isocalendar()[1]
-            date_str = week_start.strftime("%Y-%m-%d")
-            if date_str not in holiday_dates:
-                last_valid_start = date_str
-                last_valid_end = week_end.strftime("%Y-%m-%d")
-                last_valid_number = week_number
-                week += 1
-            idx += 1
-            current_date = base_date + datetime.timedelta(weeks=idx)
-        pos = (idx-1) % len(personnel)
-    else:
-        current_date = base_date
-        while week <= abs(week_offset):
-            week_start = current_date - datetime.timedelta(days=current_date.weekday())
-            week_end = week_start + datetime.timedelta(days=6)
-            week_number = week_start.isocalendar()[1]
-            date_str = week_start.strftime("%Y-%m-%d")
-            if date_str not in holiday_dates:
-                last_valid_start = date_str
-                last_valid_end = week_end.strftime("%Y-%m-%d")
-                last_valid_number = week_number
-                week += 1
-            idx -= 1
-            current_date = base_date + datetime.timedelta(weeks=idx)
-        pos = idx % len(personnel)
+    # Calculate the week dates directly
+    current_date = base_date + datetime.timedelta(weeks=week_offset)
+    week_start = current_date - datetime.timedelta(days=current_date.weekday())
+    week_end = week_start + datetime.timedelta(days=6)
+    week_number = week_start.isocalendar()[1]
+      # Calculate position based on week offset
+    pos = week_offset % len(personnel) if personnel else 0
+    
+    if not personnel:
+        # Return empty data if no personnel
+        return {
+            "id": "0",
+            "name": "No personnel available",
+            "email": "",
+            "isActive": True,
+            "week_number": week_number,
+            "week_start": week_start.strftime("%Y-%m-%d"),
+            "week_end": week_end.strftime("%Y-%m-%d")
+        }
     
     return {
         **personnel[pos],
-        "week_number": last_valid_number,
-        "week_start": last_valid_start,
-        "week_end": last_valid_end
+        "week_number": week_number,
+        "week_start": week_start.strftime("%Y-%m-%d"),
+        "week_end": week_end.strftime("%Y-%m-%d")
     }
 
 # Helper function to get the logo as a base64 string
@@ -624,7 +635,6 @@ def admin_dashboard():
         logger.warning("Unauthorized access attempt to admin dashboard")
         return redirect(url_for('admin_login'))
     personnel = load_personnel()
-    holidays = load_holidays()
     settings = load_settings()
     
     # For set start person
@@ -678,8 +688,7 @@ def admin_dashboard():
             except Exception as e:
                 logger.error(f"Error sending test email: {str(e)}")
                 msg = f"Error sending test email: {str(e)}"
-    
-    # BIAS logo removed as per requirements
+      # BIAS logo removed as per requirements
     bias_logo = None
     
     return render_template_string('''
@@ -725,24 +734,7 @@ def admin_dashboard():
         <form method="post" action="{{ url_for('reset_order') }}" style="margin-top:1em;">
             <button type="submit" style="background:#d1d5db;color:#374151;padding:0.4em 0.9em;border:none;border-radius:5px;">Reset to Alphabetical Order</button>
         </form>
-        
-        <h2 style="margin-top:2em;">Holidays</h2>
-        <table style="width:100%;border-collapse:collapse;margin-bottom:1.5em;">
-            <tr style="background:#e0e7ef;"><th>Date</th><th>Name</th><th>Action</th></tr>
-            {% for h in holidays %}
-            <tr>
-                <td>{{ h['date'] }}</td>
-                <td>{{ h['name'] }}</td>
-                <td><a href="{{ url_for('remove_holiday', date=h['date']) }}" style="color:red;">Remove</a></td>
-            </tr>
-            {% endfor %}
-        </table>
-        <form method="post" action="{{ url_for('add_holiday') }}">
-            <h3>Add Holiday</h3>
-            <input name="date" type="date" required style="margin-right:1em;padding:0.5em;border-radius:5px;border:1px solid #ccc;">
-            <input name="name" placeholder="Holiday Name" required style="margin-right:1em;padding:0.5em;border-radius:5px;border:1px solid #ccc;">
-            <button type="submit" style="background:#2563eb;color:#fff;padding:0.5em 1.2em;border:none;border-radius:5px;">Add</button>
-        </form>
+          <!-- Holiday section removed -->
         
         <h2 style="margin-top:2em;">System Settings</h2>
         <form method="post" action="{{ url_for('admin_dashboard') }}">
@@ -784,7 +776,7 @@ def admin_dashboard():
             </div>
         </form>
     </div>
-    ''', personnel=personnel, holidays=holidays, settings=settings, msg=msg, bias_logo=bias_logo)
+    ''', personnel=personnel, settings=settings, msg=msg, bias_logo=bias_logo)
 
 @app.route('/admin/add_personnel', methods=['POST'])
 def add_personnel():
@@ -837,29 +829,8 @@ def add_holiday():
     if not is_logged_in():
         return redirect(url_for('admin_login'))
     
-    date = request.form.get('date')
-    name = request.form.get('name')
-    
-    if not date or not name:
-        flash('Date and name are required', 'danger')
-        return redirect(url_for('admin_dashboard'))
-    
-    data = safe_load_json(HOLIDAYS_FILE)
-    
-    # Check if holiday already exists
-    if any(h['date'] == date for h in data['holidays']):
-        flash('Holiday already exists for this date', 'danger')
-        return redirect(url_for('admin_dashboard'))
-    
-    # Add new holiday
-    data['holidays'].append({
-        'date': date,
-        'name': name
-    })
-    
-    safe_save_json(HOLIDAYS_FILE, data)
-    
-    flash('Holiday added successfully', 'success')
+    # Holiday functionality removed
+    flash('Holiday functionality has been removed from the system', 'info')
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/remove_holiday/<date>')
@@ -867,12 +838,8 @@ def remove_holiday(date):
     if not is_logged_in():
         return redirect(url_for('admin_login'))
     
-    data = safe_load_json(HOLIDAYS_FILE)
-    data['holidays'] = [h for h in data['holidays'] if h['date'] != date]
-    
-    safe_save_json(HOLIDAYS_FILE, data)
-    
-    flash('Holiday removed successfully', 'success')
+    # Holiday functionality removed
+    flash('Holiday functionality has been removed from the system', 'info')
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/reset_order', methods=['POST'])

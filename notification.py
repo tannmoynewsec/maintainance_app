@@ -6,7 +6,17 @@ import os
 
 def load_settings():
     """Load email settings from settings.json"""
-    with open("settings.json", "r", encoding="utf-8") as f:
+    # Check if we're running in Azure or local environment
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # Try data subdirectory first (local development)
+    settings_path = os.path.join(base_dir, "data", "settings.json")
+    
+    # If not found, try the app root directory (Azure deployment)
+    if not os.path.exists(settings_path):
+        settings_path = os.path.join(base_dir, "settings.json")
+    
+    with open(settings_path, "r", encoding="utf-8") as f:
         settings = json.load(f)
     return settings
 
@@ -86,18 +96,31 @@ def send_upcoming_notifications(days_in_advance=7):
     This function should be called daily by a scheduler
     """
     import datetime
-    from app import get_person_for_week
+    import importlib
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    # Import app dynamically to avoid circular import issues
+    app_module = importlib.import_module('app')
+    get_person_for_week = getattr(app_module, 'get_person_for_week')
     
     # Calculate the date that is days_in_advance days from now
     target_date = datetime.date.today() + datetime.timedelta(days=days_in_advance)
+    logger.info(f"Checking notifications for target date: {target_date}")
     
     # Loop through the next few weeks to find whose duty starts near the target date
     for offset in range(1, 4):  # Check next 3 weeks
         person = get_person_for_week(offset)
+        if not person:
+            logger.warning(f"No person found for week offset {offset}")
+            continue
+            
         week_start = datetime.datetime.strptime(person['week_start'], "%Y-%m-%d").date()
         
         # If this person's duty starts on the target date, send a reminder
         if week_start == target_date:
+            logger.info(f"Sending reminder to {person['name']} for week {person['week_number']}")
             send_notification(
                 person['name'],
                 person['email'],
@@ -111,7 +134,17 @@ def send_upcoming_notifications(days_in_advance=7):
 if __name__ == "__main__":
     # This allows running the script directly to send test emails
     import sys
+    import logging
+    
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
     if len(sys.argv) > 1 and sys.argv[1] == "send_reminders":
+        print("Starting to send reminders...")
         send_upcoming_notifications()
+        print("Finished sending reminders")
     else:
         print("Usage: python notification.py send_reminders")
